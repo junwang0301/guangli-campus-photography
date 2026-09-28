@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowUpRight, Camera, Images, MapPin, ShieldCheck, Sparkles, WandSparkles } from "lucide-react";
 import { PhotoCard } from "@/components/photo-card";
 import { works } from "@/lib/content";
+import { publicPath } from "@/lib/public-path";
 
 const features = [
   {
@@ -63,11 +64,11 @@ export default function HomePage() {
 
           <div className="hero__visual" aria-label="校园摄影作品拼贴">
             <div className="hero-photo hero-photo--main">
-              <Image src="/demo/campus-dawn.svg" alt="晨光中的校园建筑" fill priority loading="eager" sizes="(max-width: 1080px) 100vw, 42vw" />
+              <Image src={publicPath("/demo/campus-dawn.svg")} alt="晨光中的校园建筑" fill priority loading="eager" sizes="(max-width: 1080px) 100vw, 42vw" />
               <span className="hero-index">NO. 001 / DAWN</span>
             </div>
             <div className="hero-photo hero-photo--small">
-              <Image src="/demo/rooftop-sunset.svg" alt="天台日落剪影" fill sizes="20vw" />
+              <Image src={publicPath("/demo/rooftop-sunset.svg")} alt="天台日落剪影" fill sizes="20vw" />
             </div>
           </div>
         </div>
