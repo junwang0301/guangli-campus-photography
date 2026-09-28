@@ -30,7 +30,7 @@ test("导航可进入所有核心页面", async ({ page }) => {
 });
 
 test("用户可上传原片并完成前后对比和下载", async ({ page }) => {
-  await page.route("https://dashscope.aliyuncs.com/**", (route) => {
+  await page.route("**/services/aigc/multimodal-generation/generation", (route) => {
     if (route.request().method() === "OPTIONS") {
       return route.fulfill({ status: 204, headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "POST, OPTIONS" } });
     }
@@ -38,9 +38,10 @@ test("用户可上传原片并完成前后对比和下载", async ({ page }) => 
       status: 200,
       contentType: "application/json",
       headers: { "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ output: { choices: [{ message: { content: [{ image: "https://dashscope-result.example.com/result.png" }] } }] } }),
+      body: JSON.stringify({ output: { choices: [{ message: { content: [{ image: "/demo/campus-main.jpg" }] } }] } }),
     });
   });
+
   await page.goto("/studio");
   await expect(page.locator("#photo-upload")).toHaveAttribute("data-ready", "true");
   await page.locator("#photo-upload").setInputFiles({ name: "campus.png", mimeType: "image/png", buffer: png });
@@ -52,6 +53,7 @@ test("用户可上传原片并完成前后对比和下载", async ({ page }) => 
 });
 
 test("非法格式给出明确提示", async ({ page }) => {
+
   await page.goto("/studio");
   await expect(page.locator("#photo-upload")).toHaveAttribute("data-ready", "true");
   await page.locator("#photo-upload").setInputFiles({ name: "notes.txt", mimeType: "text/plain", buffer: Buffer.from("no photo") });

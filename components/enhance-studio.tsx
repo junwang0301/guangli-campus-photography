@@ -79,7 +79,8 @@ async function requestEnhancement(file: File) {
   }
 
   const image = await fileToDataUrl(file);
-  const response = await fetch(`${QWEN_API_BASE}/services/aigc/multimodal-generation/generation`, {
+  const endpoint = QWEN_API_BASE.endsWith("/generation") ? QWEN_API_BASE : `${QWEN_API_BASE}/services/aigc/multimodal-generation/generation`;
+  const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${DASHSCOPE_API_KEY}`,
