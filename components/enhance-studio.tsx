@@ -243,7 +243,7 @@ export function EnhanceStudio() {
           <p>{fileName ? "已准备好摄影增强请求。" : "上传原片后，将自动修正曝光、暗部、高光、色偏、噪点与细节。"}</p>
           {fileName && <div className="file-meta"><FileImage size={16} aria-hidden="true" /><span>{fileName} · 上传体积 {preparedSize}</span></div>}
           {error && <div className="alert" role="alert">{error}</div>}
-          {phase === "success" && <div className="alert alert--success" role="status">{enhancementMode === "local" ? "已完成本地增强。当前未配置有效 OpenAI Key，已自动使用浏览器基础美化。" : "千问 AI 已完成优化，可拖动中间滑块查看细节变化。"}</div>}
+          {phase === "success" && <div className="alert alert--success" role="status">{enhancementMode === "local" ? "已完成本地增强。当前未配置有效的阿里云百炼 Key，已自动使用浏览器基础美化。" : "千问 AI 已完成优化，可拖动中间滑块查看细节变化。"}</div>}
           <div className="action-stack">
             {!resultUrl && <button className="button button--accent" type="button" onClick={enhance} disabled={!sourceUrl || phase === "processing"}>{phase === "processing" ? <><LoaderCircle className="spin" size={17} aria-hidden="true" />正在优化</> : <><Sparkles size={17} aria-hidden="true" />一键优化照片</>}</button>}
             {resultUrl && <a className="button button--accent" href={resultUrl} download="guangli-enhanced.webp"><Download size={17} aria-hidden="true" />下载优化成片</a>}
@@ -252,7 +252,7 @@ export function EnhanceStudio() {
         </section>
         <section className="side-card">
           <h3>我们坚持的边界</h3>
-          <ul><li>保留人物身份、构图和真实场景，不替你做创意改写。</li><li>图片仅用于本次处理，不在服务器持久保存。</li><li>当前静态版本会在浏览器中直接请求 OpenAI。</li></ul>
+          <ul><li>保留人物身份、构图和真实场景，不替你做创意改写。</li><li>图片仅用于本次处理，不在服务器持久保存。</li><li>当前静态版本会在浏览器中直接请求阿里云百炼。</li></ul>
           <div className="file-meta"><ShieldCheck size={16} aria-hidden="true" /><span>处理后请勿用于侵犯他人肖像或版权</span></div>
         </section>
       </aside>
