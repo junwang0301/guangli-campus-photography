@@ -10,7 +10,7 @@ GitHub Pages 不能运行服务端函数。此版本由浏览器直接请求阿�
 
 ```ts
 export const DASHSCOPE_API_KEY = "YOUR_DASHSCOPE_API_KEY";
-export const QWEN_IMAGE_MODEL = "qwen-image-3.0-pro";
+export const QWEN_IMAGE_MODEL = "qwen-image-2.0-pro";
 export const QWEN_API_BASE = "https://dashscope.aliyuncs.com/api/v1";
 ```
 
