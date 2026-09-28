@@ -1,0 +1,204 @@
+"use client";
+
+/* eslint-disable @next/next/no-img-element */
+
+import { Download, FileImage, LoaderCircle, RefreshCcw, ShieldCheck, Sparkles, Upload } from "lucide-react";
+import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
+import { PHOTO_ENHANCEMENT_PROMPT } from "@/lib/image-prompt";
+import { OPENAI_API_KEY, OPENAI_IMAGE_MODEL } from "@/lib/server-config";
+
+type Phase = "idle" | "ready" | "processing" | "success" | "error";
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
+const MAX_INPUT_BYTES = 20 * 1024 * 1024;
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+
+async function prepareImage(file: File) {
+  if (!ALLOWED_TYPES.includes(file.type)) throw new Error("仅支持 JPEG、PNG 和 WebP 图片。");
+  if (file.size > MAX_INPUT_BYTES) throw new Error("原图不能超过 20MB，请先压缩后重试。");
+
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, 2048 / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("浏览器无法处理这张图片，请更换浏览器后重试。");
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.9));
+  if (!blob) throw new Error("图片压缩失败，请重新选择。");
+  if (blob.size > MAX_UPLOAD_BYTES) throw new Error("图片压缩后仍超过 4MB，请选择尺寸更小的原图。");
+
+  const baseName = file.name.replace(/\.[^.]+$/, "");
+  return new File([blob], `${baseName}.webp`, { type: "image/webp" });
+}
+
+
+async function requestEnhancement(file: File) {
+  const body = new FormData();
+  body.append("model", OPENAI_IMAGE_MODEL);
+  body.append("image", file);
+  body.append("prompt", PHOTO_ENHANCEMENT_PROMPT);
+  body.append("size", "auto");
+  body.append("quality", "high");
+  body.append("output_format", "webp");
+
+  const response = await fetch("https://api.openai.com/v1/images/edits", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
+    body,
+  });
+  if (!response.ok) {
+    let message = "图片优化失败，请稍后重试。";
+    try {
+      const payload = (await response.json()) as { error?: { message?: string } };
+      if (payload.error?.message) message = payload.error.message;
+    } catch {}
+    throw new Error(message);
+  }
+  const payload = (await response.json()) as { data?: Array<{ b64_json?: string }> };
+  const base64 = payload.data?.[0]?.b64_json;
+  if (!base64) throw new Error("模型没有返回图片，请稍后重试。");
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return new Blob([bytes], { type: "image/webp" });
+}
+export function EnhanceStudio() {
+  const [phase, setPhase] = useState<Phase>("idle");
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [resultUrl, setResultUrl] = useState("");
+  const [fileName, setFileName] = useState("");
+  const [preparedSize, setPreparedSize] = useState("");
+  const [error, setError] = useState("");
+  const [split, setSplit] = useState(50);
+  const [dragging, setDragging] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const preparedFile = useRef<File | null>(null);
+
+  useEffect(() => { inputRef.current?.setAttribute("data-ready", "true"); }, []);
+
+  const resetUrls = () => {
+    if (sourceUrl) URL.revokeObjectURL(sourceUrl);
+    if (resultUrl) URL.revokeObjectURL(resultUrl);
+  };
+
+  const acceptFile = async (file: File) => {
+    resetUrls();
+    setError("");
+    setResultUrl("");
+    setPhase("idle");
+    try {
+      const prepared = await prepareImage(file);
+      preparedFile.current = prepared;
+      setSourceUrl(URL.createObjectURL(prepared));
+      setFileName(file.name);
+      setPreparedSize(`${(prepared.size / 1024 / 1024).toFixed(2)} MB`);
+      setPhase("ready");
+    } catch (cause) {
+      preparedFile.current = null;
+      setError(cause instanceof Error ? cause.message : "图片读取失败，请重试。");
+      setPhase("error");
+    }
+  };
+
+  const onInput = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) void acceptFile(file);
+  };
+
+  const onDrop = (event: DragEvent<HTMLLabelElement>) => {
+    event.preventDefault();
+    setDragging(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file) void acceptFile(file);
+  };
+
+  const enhance = async () => {
+    if (!preparedFile.current) return;
+    setPhase("processing");
+    setError("");
+    try {
+      const blob = await requestEnhancement(preparedFile.current);
+      if (!blob.type.startsWith("image/")) throw new Error("服务返回了无效的图片数据。");
+      if (resultUrl) URL.revokeObjectURL(resultUrl);
+      setResultUrl(URL.createObjectURL(blob));
+      setSplit(50);
+      setPhase("success");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "图片优化失败，请稍后重试。");
+      setPhase("error");
+    }
+  };
+
+  const reset = () => {
+    resetUrls();
+    preparedFile.current = null;
+    setSourceUrl("");
+    setResultUrl("");
+    setFileName("");
+    setPreparedSize("");
+    setError("");
+    setSplit(50);
+    setPhase("idle");
+  };
+
+  const statusText = { idle: "等待上传", ready: "原片已就绪", processing: "正在优化", success: "优化完成", error: "处理失败" }[phase];
+
+  return (
+    <div className="studio-shell">
+      <section className="workspace" aria-label="AI 图片优化工作区">
+        <div className="workspace__toolbar">
+          <span>工作区 / 自动摄影增强</span>
+          <span className="workspace__status"><i className={`status-dot is-${phase}`} />{statusText}</span>
+        </div>
+        {!sourceUrl ? (
+          <label className={`dropzone ${dragging ? "is-dragging" : ""}`} htmlFor="photo-upload"
+            onDragEnter={(event) => { event.preventDefault(); setDragging(true); }}
+            onDragOver={(event) => event.preventDefault()}
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}>
+            <input ref={inputRef} className="sr-only" id="photo-upload" type="file" data-ready="false" accept={ALLOWED_TYPES.join(",")} onChange={onInput} />
+            <div className="dropzone__inner">
+              <span className="dropzone__icon"><Upload size={28} aria-hidden="true" /></span>
+              <h2>拖入一张校园照片</h2>
+              <p>或点击选择 JPEG、PNG、WebP 文件。浏览器会在本机完成缩放与压缩。</p>
+              <span className="button button--ghost">选择原片</span>
+            </div>
+          </label>
+        ) : resultUrl ? (
+          <div className="comparison" data-testid="comparison">
+            <img src={resultUrl} alt="AI 优化后的照片" />
+            <div className="comparison__after" style={{ clipPath: `inset(0 ${100 - split}% 0 0)` }}><img src={sourceUrl} alt="AI 优化前的原片" /></div>
+            <span className="comparison__divider" style={{ left: `${split}%` }} />
+            <span className="comparison__label comparison__label--before">优化前</span>
+            <span className="comparison__label comparison__label--after">优化后</span>
+            <input className="comparison__range" type="range" min="0" max="100" value={split} aria-label="拖动查看优化前后对比" onChange={(event) => setSplit(Number(event.target.value))} />
+          </div>
+        ) : (
+          <div className="comparison"><img src={sourceUrl} alt="待优化的原始照片" /><span className="comparison__label comparison__label--before">原片预览</span></div>
+        )}
+      </section>
+      <aside className="studio-side">
+        <section className="side-card">
+          <h2>本次处理</h2>
+          <p>{fileName ? "已准备好摄影增强请求。" : "上传原片后，将自动修正曝光、暗部、高光、色偏、噪点与细节。"}</p>
+          {fileName && <div className="file-meta"><FileImage size={16} aria-hidden="true" /><span>{fileName} · 上传体积 {preparedSize}</span></div>}
+          {error && <div className="alert" role="alert">{error}</div>}
+          {phase === "success" && <div className="alert alert--success" role="status">已完成优化，可拖动中间滑块查看细节变化。</div>}
+          <div className="action-stack">
+            {!resultUrl && <button className="button button--accent" type="button" onClick={enhance} disabled={!sourceUrl || phase === "processing"}>{phase === "processing" ? <><LoaderCircle className="spin" size={17} aria-hidden="true" />正在优化</> : <><Sparkles size={17} aria-hidden="true" />一键优化照片</>}</button>}
+            {resultUrl && <a className="button button--accent" href={resultUrl} download="guangli-enhanced.webp"><Download size={17} aria-hidden="true" />下载优化成片</a>}
+            {sourceUrl && <button className="button button--ghost" type="button" onClick={reset} disabled={phase === "processing"}><RefreshCcw size={17} aria-hidden="true" />重新选择</button>}
+          </div>
+        </section>
+        <section className="side-card">
+          <h3>我们坚持的边界</h3>
+          <ul><li>保留人物身份、构图和真实场景，不替你做创意改写。</li><li>图片仅用于本次处理，不在服务器持久保存。</li><li>当前静态版本会在浏览器中直接请求 OpenAI。</li></ul>
+          <div className="file-meta"><ShieldCheck size={16} aria-hidden="true" /><span>处理后请勿用于侵犯他人肖像或版权</span></div>
+        </section>
+      </aside>
+    </div>
+  );
+}
