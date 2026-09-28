@@ -1,8 +1,6 @@
 export const PHOTO_ENHANCEMENT_PROMPT = `
-Enhance this original photograph as a skilled photography retoucher, while preserving the real scene exactly.
-Keep the same identity, people, objects, composition, crop, perspective and moment. Do not add, remove or move anything.
-Repair exposure with balanced highlights and naturally lifted shadows. Correct only obvious white-balance casts.
-Reduce noise without plastic skin, retain natural texture and film-like detail, then apply restrained sharpening.
-Protect faces and skin tones, avoid over-saturation, HDR halos, artificial colors, text, borders or watermarks.
-The result should look like a clean professional camera JPEG, not a synthetic image.
+请像专业摄影修图师一样增强这张真实照片，同时严格保持原图内容不变。
+保留人物身份、物体、构图、裁切、透视和拍摄瞬间，不新增、不删除、不移动画面元素。
+自然修复曝光，提亮暗部并保护高光，只纠正明显偏色；降低噪点但保留皮肤与材质纹理；进行克制的锐化和细节增强。
+避免过度饱和、HDR 光晕、塑料感皮肤、文字、边框或水印。输出应像专业相机直出并经过精细后期的照片，而不是重新生成的合成图。
 `.trim();

@@ -64,11 +64,11 @@ export default function HomePage() {
 
           <div className="hero__visual" aria-label="校园摄影作品拼贴">
             <div className="hero-photo hero-photo--main">
-              <Image src={publicPath("/demo/campus-dawn.svg")} alt="晨光中的校园建筑" fill priority loading="eager" sizes="(max-width: 1080px) 100vw, 42vw" />
+              <Image src={publicPath("/demo/campus-main.jpg")} alt="晨光中的大学主教学楼" fill priority loading="eager" sizes="(max-width: 1080px) 100vw, 42vw" />
               <span className="hero-index">NO. 001 / DAWN</span>
             </div>
             <div className="hero-photo hero-photo--small">
-              <Image src={publicPath("/demo/rooftop-sunset.svg")} alt="天台日落剪影" fill sizes="20vw" />
+              <Image src={publicPath("/demo/campus-friends.jpg")} alt="校园草坪上的朋友" fill sizes="20vw" />
             </div>
           </div>
         </div>

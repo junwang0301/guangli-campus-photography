@@ -5,7 +5,7 @@
 import { Download, FileImage, LoaderCircle, RefreshCcw, ShieldCheck, Sparkles, Upload } from "lucide-react";
 import { ChangeEvent, DragEvent, useEffect, useRef, useState } from "react";
 import { PHOTO_ENHANCEMENT_PROMPT } from "@/lib/image-prompt";
-import { OPENAI_API_KEY, OPENAI_IMAGE_MODEL } from "@/lib/server-config";
+import { DASHSCOPE_API_KEY, QWEN_API_BASE, QWEN_IMAGE_MODEL } from "@/lib/server-config";
 
 type Phase = "idle" | "ready" | "processing" | "success" | "error";
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -64,39 +64,59 @@ async function enhanceLocally(file: File) {
   return blob;
 }
 
+async function fileToDataUrl(file: File) {
+  return await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result));
+    reader.onerror = () => reject(new Error("图片读取失败，请重新选择。"));
+    reader.readAsDataURL(file);
+  });
+}
+
 async function requestEnhancement(file: File) {
-  if (!OPENAI_API_KEY || OPENAI_API_KEY === "PASTE_YOUR_OPENAI_API_KEY_HERE") {
+  if (!DASHSCOPE_API_KEY || DASHSCOPE_API_KEY === "PASTE_YOUR_DASHSCOPE_API_KEY_HERE") {
     return { blob: await enhanceLocally(file), mode: "local" as const };
   }
 
-  const body = new FormData();
-  body.append("model", OPENAI_IMAGE_MODEL);
-  body.append("image", file);
-  body.append("prompt", PHOTO_ENHANCEMENT_PROMPT);
-  body.append("size", "auto");
-  body.append("quality", "high");
-  body.append("output_format", "webp");
-
-  const response = await fetch("https://api.openai.com/v1/images/edits", {
+  const image = await fileToDataUrl(file);
+  const response = await fetch(`${QWEN_API_BASE}/services/aigc/multimodal-generation/generation`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
-    body,
+    headers: {
+      Authorization: `Bearer ${DASHSCOPE_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: QWEN_IMAGE_MODEL,
+      input: {
+        messages: [{
+          role: "user",
+          content: [
+            { image },
+            { text: PHOTO_ENHANCEMENT_PROMPT },
+          ],
+        }],
+      },
+      parameters: {
+        n: 1,
+        negative_prompt: "过度锐化，过度饱和，塑料皮肤，HDR光晕，改变人物，改变构图，新增物体，删除物体，文字，水印",
+        prompt_extend: true,
+        watermark: false,
+      },
+    }),
   });
-  if (!response.ok) {
-    let message = "图片优化失败，请稍后重试。";
-    try {
-      const payload = (await response.json()) as { error?: { message?: string } };
-      if (payload.error?.message) message = payload.error.message;
-    } catch {}
-    throw new Error(message);
-  }
-  const payload = (await response.json()) as { data?: Array<{ b64_json?: string }> };
-  const base64 = payload.data?.[0]?.b64_json;
-  if (!base64) throw new Error("模型没有返回图片，请稍后重试。");
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-  return { blob: new Blob([bytes], { type: "image/webp" }), mode: "ai" as const };
+
+  const payload = await response.json() as {
+    code?: string;
+    message?: string;
+    output?: { choices?: Array<{ message?: { content?: Array<{ image?: string }> } }> };
+  };
+  if (!response.ok) throw new Error(payload.message || "阿里云千问图像编辑失败，请稍后重试。");
+  const imageUrl = payload.output?.choices?.[0]?.message?.content?.find((item) => item.image)?.image;
+  if (!imageUrl) throw new Error("千问模型没有返回图片，请稍后重试。");
+
+  const imageResponse = await fetch(imageUrl);
+  if (!imageResponse.ok) throw new Error("优化图片下载失败，请稍后重试。");
+  return { blob: await imageResponse.blob(), mode: "qwen" as const };
 }
 export function EnhanceStudio() {
   const [phase, setPhase] = useState<Phase>("idle");
@@ -105,7 +125,7 @@ export function EnhanceStudio() {
   const [fileName, setFileName] = useState("");
   const [preparedSize, setPreparedSize] = useState("");
   const [error, setError] = useState("");
-  const [enhancementMode, setEnhancementMode] = useState<"ai" | "local" | "">("");
+  const [enhancementMode, setEnhancementMode] = useState<"qwen" | "local" | "">("");
   const [split, setSplit] = useState(50);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -223,7 +243,7 @@ export function EnhanceStudio() {
           <p>{fileName ? "已准备好摄影增强请求。" : "上传原片后，将自动修正曝光、暗部、高光、色偏、噪点与细节。"}</p>
           {fileName && <div className="file-meta"><FileImage size={16} aria-hidden="true" /><span>{fileName} · 上传体积 {preparedSize}</span></div>}
           {error && <div className="alert" role="alert">{error}</div>}
-          {phase === "success" && <div className="alert alert--success" role="status">{enhancementMode === "local" ? "已完成本地增强。当前未配置有效 OpenAI Key，已自动使用浏览器基础美化。" : "AI 已完成优化，可拖动中间滑块查看细节变化。"}</div>}
+          {phase === "success" && <div className="alert alert--success" role="status">{enhancementMode === "local" ? "已完成本地增强。当前未配置有效 OpenAI Key，已自动使用浏览器基础美化。" : "千问 AI 已完成优化，可拖动中间滑块查看细节变化。"}</div>}
           <div className="action-stack">
             {!resultUrl && <button className="button button--accent" type="button" onClick={enhance} disabled={!sourceUrl || phase === "processing"}>{phase === "processing" ? <><LoaderCircle className="spin" size={17} aria-hidden="true" />正在优化</> : <><Sparkles size={17} aria-hidden="true" />一键优化照片</>}</button>}
             {resultUrl && <a className="button button--accent" href={resultUrl} download="guangli-enhanced.webp"><Download size={17} aria-hidden="true" />下载优化成片</a>}

@@ -30,7 +30,7 @@ test("导航可进入所有核心页面", async ({ page }) => {
 });
 
 test("用户可上传原片并完成前后对比和下载", async ({ page }) => {
-  await page.route("https://api.openai.com/v1/images/edits", (route) => {
+  await page.route("https://dashscope.aliyuncs.com/**", (route) => {
     if (route.request().method() === "OPTIONS") {
       return route.fulfill({ status: 204, headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "POST, OPTIONS" } });
     }
@@ -38,7 +38,7 @@ test("用户可上传原片并完成前后对比和下载", async ({ page }) => 
       status: 200,
       contentType: "application/json",
       headers: { "Access-Control-Allow-Origin": "*" },
-      body: JSON.stringify({ data: [{ b64_json: png.toString("base64") }] }),
+      body: JSON.stringify({ output: { choices: [{ message: { content: [{ image: "https://dashscope-result.example.com/result.png" }] } }] } }),
     });
   });
   await page.goto("/studio");
