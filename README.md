@@ -13,7 +13,7 @@ export const OPENAI_API_KEY = "YOUR_OPENAI_API_KEY";
 export const OPENAI_IMAGE_MODEL = "gpt-image-1";
 ```
 
-账号需要拥有 `gpt-image-1` 图像编辑权限和可用额度。
+账号需要拥有 `gpt-image-1` 图像编辑权限和可用额度。未配置有效 Key 时，站内会自动使用浏览器本地曝光、对比度和饱和度增强作为降级模式。
 
 ## 本地运行
 

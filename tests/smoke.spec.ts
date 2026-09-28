@@ -46,7 +46,7 @@ test("用户可上传原片并完成前后对比和下载", async ({ page }) => 
   await page.locator("#photo-upload").setInputFiles({ name: "campus.png", mimeType: "image/png", buffer: png });
   await expect(page.getByAltText("待优化的原始照片")).toBeVisible({ timeout: 10_000 });
   await page.getByRole("button", { name: /一键优化照片/ }).click();
-  await expect(page.getByText("已完成优化，可拖动中间滑块查看细节变化。")).toBeVisible();
+  await expect(page.locator(".alert--success")).toBeVisible();
   await expect(page.getByTestId("comparison")).toBeVisible();
   await expect(page.getByRole("link", { name: /下载优化成片/ })).toHaveAttribute("download", "guangli-enhanced.webp");
 });

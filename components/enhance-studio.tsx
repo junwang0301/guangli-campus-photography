@@ -35,7 +35,40 @@ async function prepareImage(file: File) {
 }
 
 
+async function enhanceLocally(file: File) {
+  const bitmap = await createImageBitmap(file);
+  const canvas = document.createElement("canvas");
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  const context = canvas.getContext("2d", { willReadFrequently: true });
+  if (!context) throw new Error("浏览器无法处理这张图片。");
+  context.drawImage(bitmap, 0, 0);
+  bitmap.close();
+  const image = context.getImageData(0, 0, canvas.width, canvas.height);
+  const pixels = image.data;
+  for (let index = 0; index < pixels.length; index += 4) {
+    const r = pixels[index];
+    const g = pixels[index + 1];
+    const b = pixels[index + 2];
+    const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    const contrast = 1.08;
+    const saturation = 1.06;
+    const brighten = 7;
+    pixels[index] = Math.max(0, Math.min(255, (luminance + (r - luminance) * saturation - 128) * contrast + 128 + brighten));
+    pixels[index + 1] = Math.max(0, Math.min(255, (luminance + (g - luminance) * saturation - 128) * contrast + 128 + brighten));
+    pixels[index + 2] = Math.max(0, Math.min(255, (luminance + (b - luminance) * saturation - 128) * contrast + 128 + brighten));
+  }
+  context.putImageData(image, 0, 0);
+  const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", 0.92));
+  if (!blob) throw new Error("本地图片增强失败，请重新选择。");
+  return blob;
+}
+
 async function requestEnhancement(file: File) {
+  if (!OPENAI_API_KEY || OPENAI_API_KEY === "PASTE_YOUR_OPENAI_API_KEY_HERE") {
+    return { blob: await enhanceLocally(file), mode: "local" as const };
+  }
+
   const body = new FormData();
   body.append("model", OPENAI_IMAGE_MODEL);
   body.append("image", file);
@@ -63,7 +96,7 @@ async function requestEnhancement(file: File) {
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-  return new Blob([bytes], { type: "image/webp" });
+  return { blob: new Blob([bytes], { type: "image/webp" }), mode: "ai" as const };
 }
 export function EnhanceStudio() {
   const [phase, setPhase] = useState<Phase>("idle");
@@ -72,6 +105,7 @@ export function EnhanceStudio() {
   const [fileName, setFileName] = useState("");
   const [preparedSize, setPreparedSize] = useState("");
   const [error, setError] = useState("");
+  const [enhancementMode, setEnhancementMode] = useState<"ai" | "local" | "">("");
   const [split, setSplit] = useState(50);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -120,7 +154,9 @@ export function EnhanceStudio() {
     setPhase("processing");
     setError("");
     try {
-      const blob = await requestEnhancement(preparedFile.current);
+      const result = await requestEnhancement(preparedFile.current);
+      const blob = result.blob;
+      setEnhancementMode(result.mode);
       if (!blob.type.startsWith("image/")) throw new Error("服务返回了无效的图片数据。");
       if (resultUrl) URL.revokeObjectURL(resultUrl);
       setResultUrl(URL.createObjectURL(blob));
@@ -140,6 +176,7 @@ export function EnhanceStudio() {
     setFileName("");
     setPreparedSize("");
     setError("");
+    setEnhancementMode("");
     setSplit(50);
     setPhase("idle");
   };
@@ -186,7 +223,7 @@ export function EnhanceStudio() {
           <p>{fileName ? "已准备好摄影增强请求。" : "上传原片后，将自动修正曝光、暗部、高光、色偏、噪点与细节。"}</p>
           {fileName && <div className="file-meta"><FileImage size={16} aria-hidden="true" /><span>{fileName} · 上传体积 {preparedSize}</span></div>}
           {error && <div className="alert" role="alert">{error}</div>}
-          {phase === "success" && <div className="alert alert--success" role="status">已完成优化，可拖动中间滑块查看细节变化。</div>}
+          {phase === "success" && <div className="alert alert--success" role="status">{enhancementMode === "local" ? "已完成本地增强。当前未配置有效 OpenAI Key，已自动使用浏览器基础美化。" : "AI 已完成优化，可拖动中间滑块查看细节变化。"}</div>}
           <div className="action-stack">
             {!resultUrl && <button className="button button--accent" type="button" onClick={enhance} disabled={!sourceUrl || phase === "processing"}>{phase === "processing" ? <><LoaderCircle className="spin" size={17} aria-hidden="true" />正在优化</> : <><Sparkles size={17} aria-hidden="true" />一键优化照片</>}</button>}
             {resultUrl && <a className="button button--accent" href={resultUrl} download="guangli-enhanced.webp"><Download size={17} aria-hidden="true" />下载优化成片</a>}
